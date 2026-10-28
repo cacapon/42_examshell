@@ -12,17 +12,13 @@ echo "=========================================="
 echo ""
 
 # Check if user files exist
-USER_CPP="../../../rendu/mini_db/mini_db.cpp"
-USER_HPP="../../../rendu/mini_db/mini_db.hpp"
-
-if [ ! -f "$USER_CPP" ] || [ ! -f "$USER_HPP" ]; then
-    echo -e "${RED}❌ User solution not found: $USER_CPP or $USER_HPP${NC}"
-    exit 1
-fi
+USER_DIR="../../../rendu/mini_db"
 
 # Test 1: Check C++ syntax by compilation
 echo -e "${BLUE}📦 Test 1: Checking compilation...${NC}"
-g++ -Wall -Wextra -Werror -std=c++11 "$USER_CPP" -o user_mini_db 2>&1
+g++ -Wall -Wextra -Werror -std=c++98 \
+    "$USER_DIR"/*.cpp \
+    -o user_mini_db 2>&1
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Compilation failed!${NC}"
@@ -38,14 +34,14 @@ echo ""
 echo -e "${BLUE}📦 Test 2: Checking for required components...${NC}"
 
 # Check for class or main function
-if grep -q "^[[:space:]]*class\|^[[:space:]]*int[[:space:]]*main" "$USER_CPP"; then
+if grep -q "^[[:space:]]*class\|^[[:space:]]*int[[:space:]]*main" "$USER_DIR"/*.cpp; then
     echo -e "${GREEN}✅ Found class or main function${NC}"
 else
     echo -e "${YELLOW}⚠️  No class or main function detected${NC}"
 fi
 
 # Check for database-related methods (POST, GET, DELETE)
-if grep -q "POST\|GET\|DELETE" "$USER_CPP"; then
+if grep -q "POST\|GET\|DELETE" "$USER_DIR"/*.cpp; then
     echo -e "${GREEN}✅ Found database operation hints${NC}"
 else
     echo -e "${YELLOW}⚠️  No database operations (POST/GET/DELETE) detected${NC}"
@@ -56,7 +52,7 @@ echo ""
 # Test 3: Check for socket-related includes
 echo -e "${BLUE}📦 Test 3: Checking for socket/network includes...${NC}"
 
-if grep -q "#include.*socket\|#include.*arpa/inet\|#include.*netinet\|#include.*sys/socket" "$USER_CPP"; then
+if grep -q "#include.*socket\|#include.*arpa/inet\|#include.*netinet\|#include.*sys/socket" "$USER_DIR"/*.cpp; then
     echo -e "${GREEN}✅ Network includes found${NC}"
 else
     echo -e "${YELLOW}⚠️  Network includes not found (might be needed for server)${NC}"
@@ -67,7 +63,7 @@ echo ""
 # Test 4: Check for data persistence hints
 echo -e "${BLUE}📦 Test 4: Checking for file I/O...${NC}"
 
-if grep -q "ifstream\|ofstream\|fopen\|fclose\|open\|close" "$USER_HPP" "$USER_CPP"; then
+if grep -q "ifstream\|ofstream\|fopen\|fclose\|open\|close" "$USER_DIR"/*.hpp "$USER_DIR"/*.cpp; then
     echo -e "${GREEN}✅ File I/O functions detected${NC}"
 else
     echo -e "${YELLOW}⚠️  No file I/O detected${NC}"
@@ -168,7 +164,7 @@ fi
 echo ""
 
 # Cleanup
-kill $SERVER_PID 2>/dev/null
+kill -SIGINT $SERVER_PID 2>/dev/null
 wait $SERVER_PID 2>/dev/null
 sleep 1
 
