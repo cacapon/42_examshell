@@ -1,0 +1,16 @@
+# Tester logs
+tester_output.log
+
+# Build artifacts
+*.o
+*.gch
+*.out
+*.swp
+a.out
+user_mini_serv
+user_mini_db
+
+# Exam working directories and backups
+/exam/
+/rendu/
+/mini_db/
