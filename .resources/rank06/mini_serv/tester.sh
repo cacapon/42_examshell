@@ -12,7 +12,7 @@ echo "=========================================="
 echo ""
 
 # Check if user file exists
-USER_C="../../../rendu/mini_serv/mini_serv.c"
+USER_C="${1:-../../../rendu/mini_serv/mini_serv.c}"
 
 if [ ! -f "$USER_C" ]; then
     echo -e "${RED}❌ User solution not found: $USER_C${NC}"
@@ -32,6 +32,17 @@ if [ $? -ne 0 ]; then
 fi
 
 echo -e "${GREEN}✅ Compilation and linking successful!${NC}"
+echo ""
+
+# Test 2: TCP connection
+echo -e "${BLUE}📦 Test 2: Checking TCP connection...${NC}"
+python3 test_server.py "./user_mini_serv"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ TCP connection test failed!${NC}"
+	rm -f user_mini_serv
+	exit 1
+fi
+echo -e "${GREEN}✅ TCP connection test padded!${NC}"
 echo ""
 
 # Cleanup
