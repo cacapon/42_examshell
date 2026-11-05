@@ -20,6 +20,26 @@ def receive_exact(client, size):
         received += chunk
     return received
 
+def test_multiline_message(executable, port):
+    with run_server(executable, port) as server:
+        with connect_client(server, port) as client0:
+            with connect_client(server, port) as client1:
+                arrival = b"server: client 1 just arrived\n"
+                received = receive_exact(client0, len(arrival))
+                assert received == arrival
+
+                # send 2 lines in one call.
+                client0.sendall(b'Hello\nWorld\n')
+
+                # Each line must have its own prefix.
+                expected = (
+                    b"client 0: Hello\n"
+                    b"client 0: World\n"
+                )
+                received = receive_exact(client1, len(expected))
+                assert received == expected, (f"Expected {expected!r}, got {received!r}")
+                print("PASS: Multiline message")
+
 def test_message_broadcast(executable, port):
     with run_server(executable, port) as server:
         with connect_client(server, port) as client0:
@@ -111,6 +131,8 @@ if __name__ == "__main__":
         test_arrival_notification(sys.argv[1], port)
         port = find_free_port()
         test_message_broadcast(sys.argv[1], port)
+        port = find_free_port()
+        test_multiline_message(sys.argv[1], port)
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         sys.exit(1)
