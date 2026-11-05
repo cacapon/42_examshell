@@ -11,19 +11,49 @@ def find_free_port():
         sock.bind((HOST, 0))
         return sock.getsockname()[1]
 
+def receive_exact(client, size):
+    received = b""
+    while len(received) < size:
+        chunk = client.recv(size - len(received))
+        if not chunk:
+            raise RuntimeError("Connection closed unexpectedly")
+        received += chunk
+    return received
+
+def test_message_broadcast(executable, port):
+    with run_server(executable, port) as server:
+        with connect_client(server, port) as client0:
+            with connect_client(server, port) as client1:
+                expected_arrival = b"server: client 1 just arrived\n"
+                received = receive_exact(client0, len(expected_arrival))
+                assert received == expected_arrival
+
+                client0.sendall(b"Hello\n")
+
+                expected = b"client 0: Hello\n"
+                received = receive_exact(client1, len(expected))
+                assert received == expected, (f"Expected {expected!r}, got {received!r}")
+
+                # Verify that the sender does not receive its own message.
+                client0.settimeout(0.3)
+                try:
+                    unexpected = client0.recv(1024)
+                except socket.timeout:
+                    pass # No message received, as expected.
+                else:
+                    if unexpected:
+                        raise AssertionError(f"Sender received unexpected data: {unexpected!r}")
+
+                    raise AssertionError("Sender connection closed unexpectedly")
+
+                print("PASS: Message broadcast")
+
 def test_arrival_notification(executable, port):
     with run_server(executable, port) as server:
         with connect_client(server, port) as client0:
             with connect_client(server, port):
                 expected = b"server: client 1 just arrived\n"
-                received = b""
-
-                while len(received) < len(expected):
-                    chunk = client0.recv(len(expected) - len(received))
-                    if not chunk:
-                        raise RuntimeError("Connection closed unexpectedly")
-                    received += chunk
-                
+                received = receive_exact(client0, len(expected))
                 assert received == expected, (
                     f"Expected {expected!r}, got {received!r}"
                 )
@@ -40,7 +70,7 @@ def run_server(executable, port):
     server = subprocess.Popen(
         [executable, str(port)],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        stderr=None,
     )
 
     try:
@@ -79,6 +109,8 @@ if __name__ == "__main__":
         test_connection(sys.argv[1], port)
         port = find_free_port()
         test_arrival_notification(sys.argv[1], port)
+        port = find_free_port()
+        test_message_broadcast(sys.argv[1], port)
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         sys.exit(1)
