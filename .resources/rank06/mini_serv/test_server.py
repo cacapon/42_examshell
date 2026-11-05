@@ -1,4 +1,4 @@
-
+from contextlib import contextmanager
 import socket
 import subprocess
 import sys
@@ -11,7 +11,32 @@ def find_free_port():
         sock.bind((HOST, 0))
         return sock.getsockname()[1]
 
+def test_arrival_notification(executable, port):
+    with run_server(executable, port) as server:
+        with connect_client(server, port) as client0:
+            with connect_client(server, port):
+                expected = b"server: client 1 just arrived\n"
+                received = b""
+
+                while len(received) < len(expected):
+                    chunk = client0.recv(len(expected) - len(received))
+                    if not chunk:
+                        raise RuntimeError("Connection closed unexpectedly")
+                    received += chunk
+                
+                assert received == expected, (
+                    f"Expected {expected!r}, got {received!r}"
+                )
+                print("PASS: Client arrival notification")
+
+
 def test_connection(executable, port):
+    with run_server(executable, port) as server:
+        with connect_client(server, port):
+            print("PASS: Server accepts TCP connections")
+
+@contextmanager
+def run_server(executable, port):
     server = subprocess.Popen(
         [executable, str(port)],
         stdout=subprocess.DEVNULL,
@@ -19,21 +44,7 @@ def test_connection(executable, port):
     )
 
     try:
-        deadline = time.monotonic() + 3
-
-        while time.monotonic() < deadline:
-            if server.poll() is not None:
-                raise RuntimeError("Server exited unexpectedly")
-
-            try:
-                with socket.create_connection((HOST, port), timeout=0.2):
-                    print("PASS: Server accepts TCP connections")
-                    return
-            except OSError:
-                time.sleep(0.05)
-
-        raise RuntimeError("Server did not accept connections")
-
+        yield server
     finally:
         server.terminate()
         try:
@@ -41,6 +52,21 @@ def test_connection(executable, port):
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait()
+
+def connect_client(server, port):
+    deadline = time.monotonic() + 3
+
+    while time.monotonic() < deadline:
+        if server.poll() is not None:
+            raise RuntimeError("Server exited unexpectedly")
+
+        try:
+            client = socket.create_connection((HOST, port), timeout=0.2)
+            client.settimeout(2)
+            return client
+        except OSError:
+            time.sleep(0.05)
+    raise RuntimeError("Server did not accept connections")
 
 
 if __name__ == "__main__":
@@ -51,6 +77,8 @@ if __name__ == "__main__":
     try:
         port = find_free_port()
         test_connection(sys.argv[1], port)
+        port = find_free_port()
+        test_arrival_notification(sys.argv[1], port)
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         sys.exit(1)
