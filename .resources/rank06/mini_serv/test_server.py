@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import socket
 import subprocess
 import sys
@@ -20,40 +20,116 @@ def receive_exact(client, size):
         received += chunk
     return received
 
+def assert_received(client, expected):
+    received = receive_exact(client, len(expected))
+    assert received == expected, (f"Expected {expected!r}, got {received!r}")
+
+
+def assert_no_message(client, timeout=0.3):
+    original_timeout = client.gettimeout()
+    client.settimeout(timeout)
+
+    try:
+        unexpected = client.recv(1024)
+    except socket.timeout:
+        pass
+    else:
+        if not unexpected:
+            raise AssertionError("Connection closed unexpectedly")
+        raise AssertionError(
+            f"Received unexpected data: {unexpected!r}"
+        )
+    finally:
+        client.settimeout(original_timeout)
+
+
+def test_partial_message_buffer(executable, port):
+    with connected_clients(executable, port) as (_, clients):
+        client0, client1 = clients
+
+        # One complete line and one incomplete line.
+        client0.sendall(b"Hello\nWor")
+        assert_received(client1, b"client 0: Hello\n")
+
+        assert_no_message(client1)
+
+        # Complete the remaining line.
+        client0.sendall(b"ld\n")
+        assert_received(client1, b"client 0: World\n")
+
+        print("PASS: Partial message buffer")
+
+
+def test_repeated_messages(executable, port):
+    with connected_clients(executable, port) as (_, clients):
+        client0, client1 = clients
+
+        # First message.
+        client0.sendall(b"Hello\n")
+        assert_received(client1, b"client 0: Hello\n")
+
+        # Second message.
+        client0.sendall(b"World\n")
+        assert_received(client1, b"client 0: World\n")
+        assert_no_message(client1)
+
+        print("PASS: Repeated messages")
+
+
+def test_multi_client_broadcast(executable, port):
+    with connected_clients(executable, port, count=3) as (_, clients):
+        client0, client1, client2 = clients
+
+        client0.sendall(b"Hello everyone\n")
+
+        expected = b"client 0: Hello everyone\n"
+        assert_received(client1, expected)
+        assert_received(client2, expected)
+
+        print("PASS: Multi-client broadcast")
+
+
+def test_reconnect_after_disconnect(executable, port):
+    with connected_clients(executable, port) as (server, clients):
+        client0, client1 = clients
+
+        client1.close()
+        assert_received(client0, b"server: client 1 just left\n")
+
+        with connect_client(server, port) as client2:
+            assert_received(client0, b"server: client 2 just arrived\n")
+
+            client2.sendall(b"Hello\n")
+            assert_received(client0, b"client 2: Hello\n")
+
+        print("PASS: Reconnect after disconnect")
+
+
 def test_disconnect_notification(executable, port):
-    with connected_clients(executable, port) as (client0, client1):
+    with connected_clients(executable, port) as (_, clients):
+        client0, client1 = clients
         # Disconnect client 1
         client1.close()
-        expected = b"server: client 1 just left\n"
-        received = receive_exact(client0, len(expected))
-        assert received == expected, (f"Expected {expected!r}, got {received!r}")
+        assert_received(client0, b'server: client 1 just left\n')
         print("PASS: Client disconnect notification")
 
 
 def test_fragmented_message(executable, port):
-    with connected_clients(executable, port) as (client0, client1):
+    with connected_clients(executable, port) as (_, clients):
+        client0, client1 = clients
         # Nothing should be broadcast before newline.
         client0.sendall(b'Hel')
-        client1.settimeout(0.3)
-        try:
-            unexpected = client1.recv(1024)
-        except socket.timeout:
-            pass
-        else:
-            raise AssertionError(f"Received data before newline: {unexpected!r}")
+        assert_no_message(client1)
 
         # Complete the message.
         client0.sendall(b'lo\n')
-        client1.settimeout(2)
-
-        expected = b"client 0: Hello\n"
-        received = receive_exact(client1, len(expected))
-        assert received == expected, (f"Expected {expected!r}, got {received!r}")
+        assert_received(client1, b"client 0: Hello\n")
         print("PASS: Fragmented message")
 
 
 def test_multiline_message(executable, port):
-    with connected_clients(executable, port) as (client0, client1):
+    with connected_clients(executable, port) as (_, clients):
+        client0, client1 = clients
         # send 2 lines in one call.
         client0.sendall(b'Hello\nWorld\n')
 
@@ -62,59 +138,49 @@ def test_multiline_message(executable, port):
             b"client 0: Hello\n"
             b"client 0: World\n"
         )
-        received = receive_exact(client1, len(expected))
-        assert received == expected, (f"Expected {expected!r}, got {received!r}")
+        assert_received(client1, expected)
         print("PASS: Multiline message")
 
 def test_message_broadcast(executable, port):
-    with connected_clients(executable, port) as (client0, client1):
+    with connected_clients(executable, port) as (_, clients):
+        client0, client1 = clients
         client0.sendall(b"Hello\n")
-
-        expected = b"client 0: Hello\n"
-        received = receive_exact(client1, len(expected))
-        assert received == expected, (f"Expected {expected!r}, got {received!r}")
-
-        # Verify that the sender does not receive its own message.
-        client0.settimeout(0.3)
-        try:
-            unexpected = client0.recv(1024)
-        except socket.timeout:
-            pass # No message received, as expected.
-        else:
-            if unexpected:
-                raise AssertionError(f"Sender received unexpected data: {unexpected!r}")
-
-            raise AssertionError("Sender connection closed unexpectedly")
-
+        assert_received(client1, b"client 0: Hello\n")
+        assert_no_message(client0)
         print("PASS: Message broadcast")
 
 def test_arrival_notification(executable, port):
     with run_server(executable, port) as server:
         with connect_client(server, port) as client0:
             with connect_client(server, port):
-                expected = b"server: client 1 just arrived\n"
-                received = receive_exact(client0, len(expected))
-                assert received == expected, (
-                    f"Expected {expected!r}, got {received!r}"
+                assert_received(
+                    client0, b"server: client 1 just arrived\n"
                 )
                 print("PASS: Client arrival notification")
-
 
 def test_connection(executable, port):
     with run_server(executable, port) as server:
         with connect_client(server, port):
             print("PASS: Server accepts TCP connections")
 
-@contextmanager
-def connected_clients(executable, port):
-    with run_server(executable, port) as server:
-        with connect_client(server, port) as client0:
-            with connect_client(server, port) as client1:
-                arrival = b"server: client 1 just arrived\n"
-                received = receive_exact(client0, len(arrival))
-                assert received == arrival
-                yield client0, client1
 
+@contextmanager
+def connected_clients(executable, port, count=2):
+    if count < 1:
+        raise ValueError("Client count must be at least 1")
+
+    with run_server(executable, port) as server:
+        with ExitStack() as stack:
+            clients = []
+            for client_id in range(count):
+                client = stack.enter_context(connect_client(server, port))
+
+                # Existing clients receive the arrival notice.
+                expected = f"server: client {client_id} just arrived\n".encode()
+                for existing_client in clients:
+                    assert_received(existing_client, expected)
+                clients.append(client)
+            yield server, clients
 
 @contextmanager
 def run_server(executable, port):
@@ -162,6 +228,10 @@ if __name__ == "__main__":
         "multiline": test_multiline_message,
         "fragmented": test_fragmented_message,
         "disconnect": test_disconnect_notification,
+        "reconnect": test_reconnect_after_disconnect,
+        "multi_broadcast": test_multi_client_broadcast,
+        "repeated": test_repeated_messages,
+        "partial_buffer": test_partial_message_buffer,
     }
     executable = sys.argv[1]
 

@@ -34,15 +34,15 @@ fi
 echo -e "${GREEN}✅ Compilation and linking successful!${NC}"
 echo ""
 
-# Test 2: TCP connection
-echo -e "${BLUE}📦 Test 2: Checking TCP connection...${NC}"
+# Test 2: Finctional tests
+echo -e "${BLUE}📦 Test 2: Checking server functionality...${NC}"
 python3 test_server.py "./user_mini_serv"
 if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ TCP connection test failed!${NC}"
+    echo -e "${RED}❌ Functional tests failed!${NC}"
 	rm -f user_mini_serv
 	exit 1
 fi
-echo -e "${GREEN}✅ TCP connection test padded!${NC}"
+echo -e "${GREEN}✅All functional tests padded!${NC}"
 echo ""
 
 # Cleanup
@@ -51,7 +51,6 @@ rm -f user_mini_serv 2>/dev/null
 # Final report
 echo "=========================================="
 echo -e "${GREEN}✅ Build check passed!${NC}"
-echo -e "${YELLOW}⚠️ Functional tests are not implemented yet.${NC}"
 echo -e "${YELLOW}This does not mean the solution passes the exam.${NC}"
 echo ""
 
