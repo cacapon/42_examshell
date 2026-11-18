@@ -35,6 +35,14 @@ prepare_subject() {
         [ ! -f "$base_dir/../../rendu/$chosen/mini_db.hpp" ] && touch "$base_dir/../../rendu/$chosen/mini_db.hpp"
     elif [[ "$chosen" == "mini_serv" ]]; then
         [ ! -f "$base_dir/../../rendu/$chosen/mini_serv.c" ] && touch "$base_dir/../../rendu/$chosen/mini_serv.c"
+
+        src_subject_dir="$base_dir/../rank06/mini_serv/subject"
+        dest_subject_dir="$base_dir/../../rendu/$chosen/subject"
+
+        if [ -d "$src_subject_dir" ]; then
+                mkdir -p "$dest_subject_dir"
+                cp -R -n "$src_subject_dir/." "$dest_subject_dir"
+	fi
     fi
 
     # Go to the subject folder dynamically

@@ -34,8 +34,22 @@ fi
 echo -e "${GREEN}✅ Compilation and linking successful!${NC}"
 echo ""
 
-# Test 2: Finctional tests
-echo -e "${BLUE}📦 Test 2: Checking server functionality...${NC}"
+# Test 2: Check allowed functions
+echo -e "${BLUE}📦 Test 2: Checking allowed functions...${NC}"
+
+python3 check_functions.py ./user_mini_serv
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Allowed functions check failed!${NC}"
+    rm -f user_mini_serv
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Allowed functions check passed!${NC}"
+echo ""
+
+
+# Test 3: Finctional tests
+echo -e "${BLUE}📦 Test 3: Checking server functionality...${NC}"
 python3 test_server.py "./user_mini_serv"
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Functional tests failed!${NC}"
@@ -50,7 +64,7 @@ rm -f user_mini_serv 2>/dev/null
 
 # Final report
 echo "=========================================="
-echo -e "${GREEN}✅ Build check passed!${NC}"
+echo -e "${GREEN}✅ PASSED - Build and functional checks passed${NC}!"
 echo -e "${YELLOW}This does not mean the solution passes the exam.${NC}"
 echo ""
 

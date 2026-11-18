@@ -52,6 +52,15 @@ while true; do
         touch "$base_dir/../../rendu/$current_subject/mini_db.hpp"
     elif [[ "$current_subject" == "mini_serv" ]]; then
         touch "$base_dir/../../rendu/$current_subject/mini_serv.c"
+
+        # Copy provided example files
+        src_subject_dir="$base_dir/../rank06/mini_serv/subject"
+        dest_subject_dir="$base_dir/../../rendu/$current_subject/subject"
+
+        if [ -d "$src_subject_dir" ]; then
+        mkdir -p "$dest_subject_dir"
+        cp -R -n "$src_subject_dir/." "$dest_subject_dir/"
+        fi
     fi
 
     # Read subject question
